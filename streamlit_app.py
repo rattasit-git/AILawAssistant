@@ -8,7 +8,6 @@ import concurrent.futures
 import pypdf
 import docx
 from dotenv import load_dotenv
-import google.generativeai as genai  # Google Gemini SDK
 
 # Load environment variables
 load_dotenv()
