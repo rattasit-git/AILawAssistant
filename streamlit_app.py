@@ -8,13 +8,13 @@ import concurrent.futures
 import pypdf
 import docx
 from dotenv import load_dotenv
+import os
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
-CHATGEN_API_KEY = os.getenv("CHATGEN_API_KEY")
-CHATGEN_API_URL = "https://chatgen.scmc.cmu.ac.th/api/chat/completions"
-
-st.set_page_config(layout="wide")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=os.getenv(GOOGLE_API_KEY))
 
 RUBRIC_DIR = "rubrics"
 if not os.path.exists(RUBRIC_DIR):
@@ -64,10 +64,46 @@ def read_docx(file):
         st.error(f"Error reading DOCX: {e}")
         return None
 
-def evaluate_with_chatgen(proposal_text, criterion):
+def evaluate_with_google(proposal_text, criterion):
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        prompt = criterion['prompt']
+        full_prompt = f"""
+Proposal Text:
+{proposal_text}
+
+Evaluation Criterion: {criterion['name']}
+{prompt}
+Please provide a score (0-10) and a brief explanation.
+"""
+        response = model.generate_content(full_prompt)
+        result_content = response.text
+
+        import re
+        score_match = re.search(r'(?:Score|คะแนน):\s*(\d{1,2}(?:\.\d+)?)', result_content, re.IGNORECASE)
+        raw_score = 0
+        if score_match:
+            try:
+                raw_score = int(float(score_match.group(1)))
+                if not (0 <= raw_score <= 10):
+                    raw_score = 0
+            except ValueError:
+                raw_score = 0
+        else:
+            fallback_match = re.search(r'\b(\d{1,2})\b', result_content)
+            if fallback_match:
+                try:
+                    potential_score = int(fallback_match.group(1))
+                    if 0 <= potential_score <= 10:
+                        raw_score = potential_score
+                except ValueError:
+                    pass
+        return result_content, raw_score
+    except Exception as e:
+        return f"API error: {str(e)}", 0
     try:
         headers = {
-            "Authorization": f"Bearer {CHATGEN_API_KEY}",
+            "Authorization": f"Bearer {GOOGLE_API_KEY}",
             "Content-Type": "application/json"
         }
         prompt = criterion['prompt']
@@ -253,7 +289,7 @@ def rubric_editor():
         )
 
 def proposal_evaluation():
-    st.title("📝 Document Evaluation (Weighted Rubric)")
+    st.title("📝 CMU Law AI Assistant")
 
     criteria_list = load_criteria(st.session_state.selected_rubric)
     if not criteria_list:
@@ -334,7 +370,7 @@ def proposal_evaluation():
         start_time = time.time()
 
         def evaluate_and_return(idx, criterion):
-            feedback, score = evaluate_with_chatgen(proposal_text, criterion)
+            feedback, score = evaluate_with_google(proposal_text, criterion)
             return {
                 "criterion": criterion["name"],
                 "score": score,
