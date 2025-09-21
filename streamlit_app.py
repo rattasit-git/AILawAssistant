@@ -101,53 +101,6 @@ Please provide a score (0-10) and a brief explanation.
         return result_content, raw_score
     except Exception as e:
         return f"API error: {str(e)}", 0
-    try:
-        headers = {
-            "Authorization": f"Bearer {GOOGLE_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        prompt = criterion['prompt']
-        payload = {
-            "model": "gpt-4.1",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "คุณคือผู้ประเมินข้อเสนอโครงการระดับสูงที่มีความเชี่ยวชาญและประสบการณ์อย่างกว้างขวาง..."
-                },
-                {
-                    "role": "user",
-                    "content": f"""ข้อเสนอโครงการวิจัย: {proposal_text}\n\nเกณฑ์การพิจารณา: {criterion['name']}\n{prompt}\nโปรดให้คะแนน (0-10) และข้อเสนอแนะใน 2-3 หรือหากเนื้อหาไม่เกี่ยวข้องให้แจ้งว่าไม่สามารถประเมินได้ โดยขึ้นต้นด้วย "คะแนน: X" ตามด้วยข้อเสนอแนะ"""
-                }
-            ],
-            "temperature": 0.5,
-            "max_tokens": 500
-        }
-        response = requests.post(CHATGEN_API_URL, json=payload, headers=headers, timeout=300)
-        response.raise_for_status()
-        result_content = response.json()["choices"][0]["message"]["content"]
-        score_match = re.search(r'(?:คะแนน|Score):\s*(\d{1,2}(?:\.\d+)?)', result_content, re.IGNORECASE)
-        raw_score = 0
-        if score_match:
-            try:
-                raw_score = int(float(score_match.group(1)))
-                if not (0 <= raw_score <= 10):
-                    raw_score = 0
-            except ValueError:
-                raw_score = 0
-        else:
-            fallback_match = re.search(r'\b(\d{1,2})\b', result_content)
-            if fallback_match:
-                try:
-                    potential_score = int(fallback_match.group(1))
-                    if 0 <= potential_score <= 10:
-                        raw_score = potential_score
-                except ValueError:
-                    pass
-        return result_content, raw_score
-    except Exception as e:
-        return f"API error: {str(e)}", 0
-
-# Sidebar rubric selection and management
 
 rubric_files = list_rubrics()
 if "selected_rubric" not in st.session_state:
@@ -296,7 +249,7 @@ def proposal_evaluation():
         st.warning("No criteria found. Please add criteria in the editor.")
         return
 
-    uploaded_file = st.file_uploader("Upload proposal file (PDF/DOCX)", type=["pdf", "docx"])
+    uploaded_file = st.file_uploader("Upload file (PDF/DOCX)", type=["pdf", "docx"])
     proposal_text = ""
     if uploaded_file:
         if uploaded_file.type == "application/pdf":
@@ -307,7 +260,7 @@ def proposal_evaluation():
             st.success("File loaded successfully.")
         else:
             st.error("Could not read file.")
-    proposal_text = st.text_area("Or paste proposal text here:", value=proposal_text, height=300)
+    proposal_text = st.text_area("Or paste text here:", value=proposal_text, height=300)
 
     # Red Evaluate button styling
     st.markdown(
@@ -328,7 +281,7 @@ def proposal_evaluation():
         unsafe_allow_html=True,
     )
 
-    evaluate_clicked = st.button("Evaluate Proposal")
+    evaluate_clicked = st.button("Evaluate")
 
     # Initialize checklist status
     if "checklist_status" not in st.session_state or st.session_state.get("reset_checklist", False):
@@ -408,7 +361,8 @@ def proposal_evaluation():
         st.write("### Results")
         st.table([{k: v for k, v in r.items() if k != "feedback" and k != "idx"} for r in results if r])
         for r in results:
-            st.markdown(f"**{r['criterion']}**: {r['feedback']}")
+            st.markdown(f"""**{r['criterion']}**: {r['feedback']}<br><hr style="border:2px solid #2196F3; margin: 20px 0;">""",
+                unsafe_allow_html=True)
 
         st.session_state.reset_checklist = True
 
